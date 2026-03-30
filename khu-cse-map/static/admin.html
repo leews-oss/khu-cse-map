@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>관리자 — KHU CSE 커리큘럼 연결 지도</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafaf8; --surface: #ffffff; --surface-dim: #f2f1ee;
+    --border: #e2e0db; --border-strong: #ccc9c2;
+    --text: #1a1917; --text-secondary: #6b6960; --text-tertiary: #9c9889;
+    --cat-basic: #3a7bd5; --cat-basic-bg: #e8f0fc;
+    --cat-required: #2d8a56; --cat-required-bg: #e4f5eb;
+    --cat-elective: #c67b1a; --cat-elective-bg: #fdf0dd;
+    --edge-prereq: #3a7bd5; --edge-overlap: #9b59b6; --edge-extends: #2d8a56;
+    --font-main: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --danger: #dc3545; --danger-bg: #fdecea;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-main); min-height: 100vh; }
+
+  /* Header */
+  .header { position: sticky; top: 0; z-index: 100; background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); padding: 0 32px; height: 52px; display: flex; align-items: center; gap: 14px; }
+  .header-title { font-size: 15px; font-weight: 700; letter-spacing: -0.03em; }
+  .header-divider { width: 1px; height: 18px; background: var(--border); }
+  .header-sub { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
+  .header-right { margin-left: auto; display: flex; gap: 8px; }
+
+  /* Auth screen */
+  .auth-screen { display: flex; align-items: center; justify-content: center; height: 100vh; }
+  .auth-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 360px; text-align: center; }
+  .auth-box h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .auth-box p { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; }
+  .auth-box .error { font-size: 12px; color: var(--danger); margin-top: 8px; display: none; }
+
+  /* Common form elements */
+  input, select, textarea { font-family: var(--font-main); font-size: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; outline: none; transition: border-color 0.15s; width: 100%; }
+  input:focus, select:focus, textarea:focus { border-color: var(--cat-basic); }
+  textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
+  select { cursor: pointer; }
+  label { display: block; font-size: 11px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; font-family: var(--font-mono); letter-spacing: 0.03em; }
+  .form-group { margin-bottom: 14px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-family: var(--font-main); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; color: var(--text); }
+  .btn:hover { background: var(--surface-dim); border-color: var(--border-strong); }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--cat-basic); color: #fff; border-color: var(--cat-basic); }
+  .btn-primary:hover { background: #2d6bc4; }
+  .btn-danger { color: var(--danger); border-color: var(--danger); }
+  .btn-danger:hover { background: var(--danger-bg); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .btn-preview { background: var(--cat-required-bg); color: var(--cat-required); border-color: var(--cat-required); }
+  .btn-preview:hover { background: #d0eddb; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; padding: 0 32px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .tab { padding: 12px 20px; font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--cat-basic); border-bottom-color: var(--cat-basic); }
+
+  /* Content area */
+  .content { max-width: 1100px; margin: 0 auto; padding: 24px 32px; }
+  .content.hidden { display: none; }
+
+  /* Table */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { text-align: left; padding: 10px 12px; background: var(--surface-dim); font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-tertiary); letter-spacing: 0.04em; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .data-table tr:hover td { background: var(--surface-dim); }
+  .data-table .actions { display: flex; gap: 4px; }
+
+  /* Badges */
+  .badge { display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 4px; }
+  .badge-basic { background: var(--cat-basic-bg); color: var(--cat-basic); }
+  .badge-required { background: var(--cat-required-bg); color: var(--cat-required); }
+  .badge-elective { background: var(--cat-elective-bg); color: var(--cat-elective); }
+  .badge-prereq { background: #e8f0fc; color: #3a7bd5; }
+  .badge-overlap { background: #f3ecf8; color: #7c3aad; }
+  .badge-extends { background: #e4f5eb; color: #2d8a56; }
+
+  /* Concepts display */
+  .concepts-list { display: flex; flex-wrap: wrap; gap: 3px; }
+  .concept-pill { font-size: 10px; padding: 1px 6px; background: var(--surface-dim); border-radius: 3px; color: var(--text-secondary); font-family: var(--font-mono); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 500; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--surface); border-radius: 16px; width: 480px; max-height: 80vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.12); transform: translateY(8px); transition: transform 0.2s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h3 { font-size: 16px; font-weight: 700; }
+  .modal-close { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-secondary); }
+  .modal-close:hover { background: var(--surface-dim); }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* Stats bar */
+  .stats-bar { display: flex; gap: 16px; margin-bottom: 20px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; flex: 1; }
+  .stat-card .label { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
+  .stat-card .value { font-size: 24px; font-weight: 700; margin-top: 2px; }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .toolbar-left { font-size: 13px; color: var(--text-secondary); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 10px 20px; border-radius: 10px; font-size: 13px; opacity: 0; transition: all 0.3s; z-index: 600; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- Auth Screen -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-box">
+    <h2>관리자 로그인</h2>
+    <p>커리큘럼 데이터를 수정하려면 비밀번호를 입력하세요.</p>
+    <input type="password" id="authPassword" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doAuth()">
+    <div class="error" id="authError">비밀번호가 올바르지 않습니다.</div>
+    <div style="margin-top:16px"><button class="btn btn-primary" style="width:100%" onclick="doAuth()">로그인</button></div>
+  </div>
+</div>
+
+<!-- Main Admin UI (hidden until auth) -->
+<div id="adminUI" style="display:none">
+
+<div class="header">
+  <div class="header-title">관리자</div>
+  <div class="header-divider"></div>
+  <div class="header-sub">KHU CSE 커리큘럼 연결 지도</div>
+  <div class="header-right">
+    <button class="btn btn-preview btn-sm" onclick="window.open('/','_blank')">맵 미리보기 ↗</button>
+    <button class="btn btn-sm" onclick="location.reload()">로그아웃</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="subjects" onclick="switchTab('subjects')">과목 관리</div>
+  <div class="tab" data-tab="connections" onclick="switchTab('connections')">연결 관리</div>
+</div>
+
+<!-- Subjects Tab -->
+<div class="content" id="tab-subjects">
+  <div class="stats-bar" id="subjectStats"></div>
+  <div class="toolbar">
+    <div class="toolbar-left" id="subjectCount"></div>
+    <button class="btn btn-primary btn-sm" onclick="openSubjectModal()">+ 과목 추가</button>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>학수번호</th><th>과목명</th><th>학기</th><th>구분</th><th>학점</th><th>핵심 개념</th><th></th></tr></thead>
+    <tbody id="subjectTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Connections Tab -->
+<div class="content hidden" id="tab-connections">
+  <div class="stats-bar" id="connStats"></div>
+  <div class="toolbar">
+    <div class="toolbar-left" id="connCount"></div>
+    <button class="btn btn-primary btn-sm" onclick="openConnModal()">+ 연결 추가</button>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>출발 과목</th><th>→</th><th>도착 과목</th><th>관계</th><th>이유</th><th>공유 개념</th><th></th></tr></thead>
+    <tbody id="connTableBody"></tbody>
+  </table>
+</div>
+
+</div>
+
+<!-- Subject Modal -->
+<div class="modal-overlay" id="subjectModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="subjectModalTitle">과목 추가</h3><button class="modal-close" onclick="closeModal('subjectModal')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>학수번호</label><input id="sf-id" placeholder="예: CSE204"></div>
+      <div class="form-group"><label>과목명</label><input id="sf-name" placeholder="예: 자료구조"></div>
+      <div class="form-group"><label>학기</label>
+        <select id="sf-semester"><option value="1-1">1학년 1학기</option><option value="1-2">1학년 2학기</option><option value="2-1">2학년 1학기</option><option value="2-2">2학년 2학기</option><option value="3-1">3학년 1학기</option><option value="3-2">3학년 2학기</option><option value="4-1">4학년 1학기</option><option value="4-2">4학년 2학기</option></select></div>
+      <div class="form-group"><label>이수구분</label>
+        <select id="sf-category"><option value="basic">전공기초</option><option value="required">전공필수</option><option value="elective">전공선택</option></select></div>
+      <div class="form-group"><label>학점</label><input id="sf-credits" type="number" value="3" min="1" max="6"></div>
+      <div class="form-group"><label>핵심 개념 (쉼표로 구분)</label><input id="sf-concepts" placeholder="예: 트리, 그래프, 해시테이블"></div>
+      <div class="form-group"><label>설명</label><textarea id="sf-description" placeholder="과목에 대한 설명"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('subjectModal')">취소</button>
+      <button class="btn btn-primary" id="subjectSubmitBtn" onclick="submitSubject()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- Connection Modal -->
+<div class="modal-overlay" id="connModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="connModalTitle">연결 추가</h3><button class="modal-close" onclick="closeModal('connModal')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>출발 과목</label><select id="cf-from"></select></div>
+      <div class="form-group"><label>도착 과목</label><select id="cf-to"></select></div>
+      <div class="form-group"><label>관계 유형</label>
+        <select id="cf-type"><option value="prereq">선수강</option><option value="overlap">개념 겹침</option><option value="extends">심화 확장</option></select></div>
+      <div class="form-group"><label>연결 이유</label><textarea id="cf-reason" placeholder="왜 이 두 과목이 연결되는지 설명"></textarea></div>
+      <div class="form-group"><label>공유 개념 (쉼표로 구분)</label><input id="cf-shared" placeholder="예: 트리, 해시테이블"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('connModal')">취소</button>
+      <button class="btn btn-primary" id="connSubmitBtn" onclick="submitConn()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal" style="width:380px">
+    <div class="modal-header"><h3>삭제 확인</h3><button class="modal-close" onclick="closeModal('confirmModal')">×</button></div>
+    <div class="modal-body"><p id="confirmMsg" style="font-size:14px;line-height:1.6"></p></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('confirmModal')">취소</button>
+      <button class="btn btn-danger" id="confirmBtn">삭제</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let subjects = [], connections = [];
+let editingSubjectId = null, editingConnId = null;
+const catLabels = { basic: "전공기초", required: "전공필수", elective: "전공선택" };
+const typeLabels = { prereq: "선수강", overlap: "개념 겹침", extends: "심화 확장" };
+
+// ── Auth ──
+async function doAuth() {
+  const pw = document.getElementById("authPassword").value;
+  try {
+    const res = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pw }) });
+    if (res.ok) {
+      document.getElementById("authScreen").style.display = "none";
+      document.getElementById("adminUI").style.display = "block";
+      loadAll();
+    } else {
+      document.getElementById("authError").style.display = "block";
+    }
+  } catch { document.getElementById("authError").style.display = "block"; }
+}
+
+// ── Data loading ──
+async function loadAll() {
+  subjects = await fetch("/api/subjects").then(r => r.json());
+  connections = await fetch("/api/connections").then(r => r.json());
+  renderSubjects();
+  renderConnections();
+  updateStats();
+}
+
+function updateStats() {
+  const byCat = { basic: 0, required: 0, elective: 0 };
+  subjects.forEach(s => byCat[s.category]++);
+  document.getElementById("subjectStats").innerHTML = `
+    <div class="stat-card"><div class="label">전체 과목</div><div class="value">${subjects.length}</div></div>
+    <div class="stat-card"><div class="label">전공기초</div><div class="value" style="color:var(--cat-basic)">${byCat.basic}</div></div>
+    <div class="stat-card"><div class="label">전공필수</div><div class="value" style="color:var(--cat-required)">${byCat.required}</div></div>
+    <div class="stat-card"><div class="label">전공선택</div><div class="value" style="color:var(--cat-elective)">${byCat.elective}</div></div>`;
+  const byType = { prereq: 0, overlap: 0, extends: 0 };
+  connections.forEach(c => byType[c.type]++);
+  document.getElementById("connStats").innerHTML = `
+    <div class="stat-card"><div class="label">전체 연결</div><div class="value">${connections.length}</div></div>
+    <div class="stat-card"><div class="label">선수강</div><div class="value" style="color:var(--edge-prereq)">${byType.prereq}</div></div>
+    <div class="stat-card"><div class="label">개념 겹침</div><div class="value" style="color:var(--edge-overlap)">${byType.overlap}</div></div>
+    <div class="stat-card"><div class="label">심화 확장</div><div class="value" style="color:var(--edge-extends)">${byType.extends}</div></div>`;
+  document.getElementById("subjectCount").textContent = `${subjects.length}개 과목`;
+  document.getElementById("connCount").textContent = `${connections.length}개 연결`;
+}
+
+// ── Tabs ──
+function switchTab(tab) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  document.getElementById("tab-subjects").classList.toggle("hidden", tab !== "subjects");
+  document.getElementById("tab-connections").classList.toggle("hidden", tab !== "connections");
+}
+
+// ── Subjects table ──
+function renderSubjects() {
+  const tbody = document.getElementById("subjectTableBody");
+  tbody.innerHTML = subjects.map(s => `<tr>
+    <td><span style="font-family:var(--font-mono);font-size:12px">${s.id}</span></td>
+    <td style="font-weight:600">${s.name}</td>
+    <td style="font-size:12px;color:var(--text-secondary)">${s.semester}</td>
+    <td><span class="badge badge-${s.category}">${catLabels[s.category]}</span></td>
+    <td style="text-align:center">${s.credits}</td>
+    <td><div class="concepts-list">${s.concepts.map(c => `<span class="concept-pill">${c}</span>`).join("")}</div></td>
+    <td><div class="actions">
+      <button class="btn btn-sm" onclick="editSubject('${s.id}')">수정</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteSubjectConfirm('${s.id}','${s.name}')">삭제</button>
+    </div></td>
+  </tr>`).join("");
+}
+
+// ── Connections table ──
+function renderConnections() {
+  const tbody = document.getElementById("connTableBody");
+  tbody.innerHTML = connections.map(c => {
+    const fromS = subjects.find(s => s.id === c.from);
+    const toS = subjects.find(s => s.id === c.to);
+    return `<tr>
+      <td style="font-weight:500">${fromS ? fromS.name : c.from}</td>
+      <td style="color:var(--text-tertiary)">→</td>
+      <td style="font-weight:500">${toS ? toS.name : c.to}</td>
+      <td><span class="badge badge-${c.type}">${typeLabels[c.type]}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.reason}">${c.reason}</td>
+      <td><div class="concepts-list">${(c.shared||[]).map(s => `<span class="concept-pill">${s}</span>`).join("")}</div></td>
+      <td><div class="actions">
+        <button class="btn btn-sm" onclick="editConn(${c.id})">수정</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteConnConfirm(${c.id})">삭제</button>
+      </div></td>
+    </tr>`;
+  }).join("");
+}
+
+// ── Subject Modal ──
+function openSubjectModal() {
+  editingSubjectId = null;
+  document.getElementById("subjectModalTitle").textContent = "과목 추가";
+  document.getElementById("subjectSubmitBtn").textContent = "추가";
+  document.getElementById("sf-id").value = "";
+  document.getElementById("sf-id").disabled = false;
+  document.getElementById("sf-name").value = "";
+  document.getElementById("sf-semester").value = "1-1";
+  document.getElementById("sf-category").value = "required";
+  document.getElementById("sf-credits").value = "3";
+  document.getElementById("sf-concepts").value = "";
+  document.getElementById("sf-description").value = "";
+  openModal("subjectModal");
+}
+
+function editSubject(id) {
+  const s = subjects.find(x => x.id === id);
+  if (!s) return;
+  editingSubjectId = id;
+  document.getElementById("subjectModalTitle").textContent = "과목 수정";
+  document.getElementById("subjectSubmitBtn").textContent = "저장";
+  document.getElementById("sf-id").value = s.id;
+  document.getElementById("sf-id").disabled = true;
+  document.getElementById("sf-name").value = s.name;
+  document.getElementById("sf-semester").value = s.semester;
+  document.getElementById("sf-category").value = s.category;
+  document.getElementById("sf-credits").value = s.credits;
+  document.getElementById("sf-concepts").value = s.concepts.join(", ");
+  document.getElementById("sf-description").value = s.description || "";
+  openModal("subjectModal");
+}
+
+async function submitSubject() {
+  const data = {
+    id: document.getElementById("sf-id").value.trim(),
+    name: document.getElementById("sf-name").value.trim(),
+    semester: document.getElementById("sf-semester").value,
+    category: document.getElementById("sf-category").value,
+    credits: parseInt(document.getElementById("sf-credits").value),
+    concepts: document.getElementById("sf-concepts").value.split(",").map(s => s.trim()).filter(Boolean),
+    description: document.getElementById("sf-description").value.trim(),
+  };
+  if (!data.id || !data.name) { showToast("학수번호와 과목명을 입력하세요"); return; }
+
+  try {
+    let res;
+    if (editingSubjectId) {
+      res = await fetch(`/api/subjects/${editingSubjectId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    } else {
+      res = await fetch("/api/subjects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    }
+    if (res.ok) {
+      closeModal("subjectModal");
+      showToast(editingSubjectId ? "과목이 수정되었습니다" : "과목이 추가되었습니다");
+      await loadAll();
+    } else {
+      const err = await res.json();
+      showToast(err.detail || "오류 발생");
+    }
+  } catch { showToast("서버 연결 실패"); }
+}
+
+async function deleteSubjectConfirm(id, name) {
+  const res = await fetch(`/api/subjects/${id}/connection-count`);
+  const { count } = await res.json();
+  const msg = count > 0
+    ? `"${name}" 과목을 삭제하시겠습니까?\n이 과목과 연결된 ${count}개의 관계도 함께 삭제됩니다.`
+    : `"${name}" 과목을 삭제하시겠습니까?`;
+  document.getElementById("confirmMsg").textContent = msg;
+  document.getElementById("confirmBtn").onclick = async () => {
+    await fetch(`/api/subjects/${id}`, { method: "DELETE" });
+    closeModal("confirmModal");
+    showToast("과목이 삭제되었습니다");
+    await loadAll();
+  };
+  openModal("confirmModal");
+}
+
+// ── Connection Modal ──
+function populateSubjectDropdowns() {
+  const opts = subjects.map(s => `<option value="${s.id}">${s.name} (${s.id})</option>`).join("");
+  document.getElementById("cf-from").innerHTML = opts;
+  document.getElementById("cf-to").innerHTML = opts;
+}
+
+function openConnModal() {
+  editingConnId = null;
+  document.getElementById("connModalTitle").textContent = "연결 추가";
+  document.getElementById("connSubmitBtn").textContent = "추가";
+  populateSubjectDropdowns();
+  document.getElementById("cf-type").value = "prereq";
+  document.getElementById("cf-reason").value = "";
+  document.getElementById("cf-shared").value = "";
+  openModal("connModal");
+}
+
+function editConn(id) {
+  const c = connections.find(x => x.id === id);
+  if (!c) return;
+  editingConnId = id;
+  document.getElementById("connModalTitle").textContent = "연결 수정";
+  document.getElementById("connSubmitBtn").textContent = "저장";
+  populateSubjectDropdowns();
+  document.getElementById("cf-from").value = c.from;
+  document.getElementById("cf-to").value = c.to;
+  document.getElementById("cf-type").value = c.type;
+  document.getElementById("cf-reason").value = c.reason || "";
+  document.getElementById("cf-shared").value = (c.shared || []).join(", ");
+  openModal("connModal");
+}
+
+async function submitConn() {
+  const data = {
+    from_id: document.getElementById("cf-from").value,
+    to_id: document.getElementById("cf-to").value,
+    type: document.getElementById("cf-type").value,
+    reason: document.getElementById("cf-reason").value.trim(),
+    shared: document.getElementById("cf-shared").value.split(",").map(s => s.trim()).filter(Boolean),
+  };
+  if (data.from_id === data.to_id) { showToast("출발 과목과 도착 과목이 같습니다"); return; }
+
+  try {
+    let res;
+    if (editingConnId) {
+      res = await fetch(`/api/connections/${editingConnId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    } else {
+      res = await fetch("/api/connections", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    }
+    if (res.ok) {
+      closeModal("connModal");
+      showToast(editingConnId ? "연결이 수정되었습니다" : "연결이 추가되었습니다");
+      await loadAll();
+    } else {
+      const err = await res.json();
+      showToast(err.detail || "오류 발생");
+    }
+  } catch { showToast("서버 연결 실패"); }
+}
+
+async function deleteConnConfirm(id) {
+  document.getElementById("confirmMsg").textContent = "이 연결을 삭제하시겠습니까?";
+  document.getElementById("confirmBtn").onclick = async () => {
+    await fetch(`/api/connections/${id}`, { method: "DELETE" });
+    closeModal("confirmModal");
+    showToast("연결이 삭제되었습니다");
+    await loadAll();
+  };
+  openModal("confirmModal");
+}
+
+// ── Modal helpers ──
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+// Close on overlay click
+document.querySelectorAll(".modal-overlay").forEach(ov => {
+  ov.addEventListener("click", e => { if (e.target === ov) ov.classList.remove("open"); });
+});
+
+// ── Toast ──
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2500);
+}
+</script>
+</body>
+</html>

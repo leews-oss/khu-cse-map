@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KHU CSE 커리큘럼 연결 지도</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafaf8;
+    --surface: #ffffff;
+    --surface-dim: #f2f1ee;
+    --border: #e2e0db;
+    --border-strong: #ccc9c2;
+    --text: #1a1917;
+    --text-secondary: #6b6960;
+    --text-tertiary: #9c9889;
+    --cat-basic: #3a7bd5;
+    --cat-basic-bg: #e8f0fc;
+    --cat-required: #2d8a56;
+    --cat-required-bg: #e4f5eb;
+    --cat-elective: #c67b1a;
+    --cat-elective-bg: #fdf0dd;
+    --edge-prereq: #3a7bd5;
+    --edge-overlap: #9b59b6;
+    --edge-extends: #2d8a56;
+    --font-main: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --panel-w: 380px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-main); overflow: hidden; height: 100vh; width: 100vw; }
+
+  /* ── Header ── */
+  .header { position: fixed; top: 0; left: 0; right: 0; height: 52px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 14px; z-index: 100; backdrop-filter: blur(8px); background: rgba(255,255,255,0.92); }
+  .header-title { font-size: 15px; font-weight: 700; letter-spacing: -0.03em; }
+  .header-divider { width: 1px; height: 18px; background: var(--border); }
+  .header-subtitle { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); letter-spacing: 0.02em; }
+  .header-right { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+  .legend { display: flex; gap: 14px; align-items: center; font-size: 11px; color: var(--text-secondary); }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 3px; }
+  .legend-line { width: 18px; height: 0; border-top: 2px solid; }
+  .legend-line.dashed { border-top-style: dashed; }
+  .legend-line.dotted { border-top-style: dotted; border-top-width: 3px; }
+
+  /* ── Graph ── */
+  .graph-container { position: fixed; top: 52px; left: 0; bottom: 0; right: 0; overflow: hidden; cursor: grab; transition: right 0.35s cubic-bezier(0.4,0,0.2,1); }
+  .graph-container.panel-open { right: var(--panel-w); }
+  .graph-container:active { cursor: grabbing; }
+  .graph-container svg { width: 100%; height: 100%; }
+
+  /* ── Lanes ── */
+  .lane-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; fill: var(--text-tertiary); text-anchor: middle; letter-spacing: 0.03em; }
+  .lane-sublabel { font-family: var(--font-mono); font-size: 9px; fill: var(--text-tertiary); text-anchor: middle; opacity: 0.5; }
+  .lane-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
+  .lane-bg { fill: var(--surface-dim); opacity: 0.35; }
+
+  /* ── Nodes ── */
+  .node { cursor: pointer; transition: opacity 0.25s ease; }
+  .node-rect { rx: 10; ry: 10; stroke-width: 1.5; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
+  .node:hover .node-rect { stroke-width: 2.5; filter: drop-shadow(0 1px 6px rgba(0,0,0,0.06)); }
+  .node.highlighted .node-rect { stroke-width: 2.5; filter: drop-shadow(0 1px 8px rgba(0,0,0,0.08)); }
+  .node.dimmed { opacity: 0.1; pointer-events: none; transition: opacity 0.3s ease; }
+  .node.selected .node-rect { stroke-width: 3; filter: drop-shadow(0 3px 16px rgba(0,0,0,0.14)); }
+  .node-name { font-family: var(--font-main); font-size: 12px; font-weight: 600; fill: var(--text); text-anchor: middle; pointer-events: none; }
+  .node-code { font-family: var(--font-mono); font-size: 9px; fill: var(--text-secondary); text-anchor: middle; pointer-events: none; }
+  .node-category-badge { font-family: var(--font-mono); font-size: 8px; font-weight: 500; text-anchor: middle; pointer-events: none; }
+
+  /* ── Edges ── */
+  .edge { fill: none; stroke-width: 1.5; transition: opacity 0.25s ease, stroke-width 0.2s ease; }
+  .edge-prereq { stroke: var(--edge-prereq); opacity: 0.4; }
+  .edge-overlap { stroke: var(--edge-overlap); stroke-dasharray: 6 4; opacity: 0.3; }
+  .edge-extends { stroke: var(--edge-extends); stroke-dasharray: 10 4; opacity: 0.35; }
+  .edge.dimmed { opacity: 0.04 !important; transition: opacity 0.3s ease; }
+  .edge.highlighted { opacity: 1 !important; stroke-width: 2.5; }
+  .edge-hover { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+
+  /* ── Tooltip ── */
+  .tooltip { position: fixed; z-index: 200; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04); pointer-events: none; opacity: 0; transition: opacity 0.18s ease; max-width: 300px; font-size: 12px; line-height: 1.6; }
+  .tooltip.visible { opacity: 1; }
+  .tooltip-type { font-family: var(--font-mono); font-size: 10px; font-weight: 500; margin-bottom: 6px; letter-spacing: 0.02em; }
+  .tooltip-reason { color: var(--text-secondary); }
+  .tooltip-shared { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .tooltip-tag { font-family: var(--font-mono); font-size: 9px; padding: 2px 7px; border-radius: 4px; background: var(--surface-dim); color: var(--text-secondary); }
+
+  /* ── Detail Panel ── */
+  .detail-panel { position: fixed; top: 52px; right: 0; bottom: 0; width: var(--panel-w); background: var(--surface); border-left: 1px solid var(--border); transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); z-index: 90; overflow-y: auto; box-shadow: -4px 0 24px rgba(0,0,0,0); }
+  .detail-panel.open { transform: translateX(0); box-shadow: -4px 0 24px rgba(0,0,0,0.04); }
+  .detail-panel::-webkit-scrollbar { width: 5px; }
+  .detail-panel::-webkit-scrollbar-track { background: transparent; }
+  .detail-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .detail-panel::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+  .panel-header { padding: 24px 24px 18px; border-bottom: 1px solid var(--border); position: relative; }
+  .panel-close { position: absolute; top: 18px; right: 18px; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--text-secondary); transition: all 0.15s; }
+  .panel-close:hover { background: var(--surface-dim); color: var(--text); }
+  .panel-cat-badge { display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 500; padding: 3px 10px; border-radius: 5px; margin-bottom: 10px; letter-spacing: 0.02em; }
+  .panel-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.03em; line-height: 1.2; }
+  .panel-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
+  .panel-section { padding: 18px 24px; border-bottom: 1px solid var(--border); }
+  .panel-section:last-child { border-bottom: none; }
+  .panel-section-label { font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: var(--text-tertiary); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px; }
+
+  /* ── Concept tags ── */
+  .concepts-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+  .concept-tag { font-size: 11px; padding: 5px 11px; border-radius: 6px; background: var(--surface-dim); color: var(--text-secondary); border: 1px solid var(--border); cursor: pointer; transition: all 0.18s ease; user-select: none; }
+  .concept-tag:hover { border-color: var(--border-strong); background: #eae8e4; transform: translateY(-1px); }
+  .concept-tag.shared { border-color: var(--edge-overlap); background: #f3ecf8; color: #7c3aad; }
+  .concept-tag.shared:hover { background: #e8ddf3; }
+  .concept-tag.active { border-color: #7c3aad; background: #7c3aad; color: #fff; box-shadow: 0 2px 8px rgba(124,58,173,0.25); transform: translateY(-1px); }
+
+  .node.concept-match .node-rect { stroke-width: 3; stroke-dasharray: 4 2; }
+
+  .concept-hint { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(4px); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 18px; font-size: 12px; color: var(--text-secondary); z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.06); opacity: 0; transition: all 0.25s ease; pointer-events: none; }
+  .concept-hint.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Chain ── */
+  .chain-wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+  .chain-node { font-size: 11px; font-weight: 500; padding: 5px 12px; border-radius: 7px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-dim); transition: all 0.18s ease; }
+  .chain-node:hover { border-color: var(--border-strong); background: #eae8e4; transform: translateY(-1px); }
+  .chain-node.current { border-color: var(--cat-basic); background: var(--cat-basic-bg); color: var(--cat-basic); font-weight: 600; }
+  .chain-arrow { color: var(--text-tertiary); font-size: 13px; opacity: 0.5; }
+
+  /* ── Connection cards ── */
+  .conn-card { padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; border: 1px solid var(--border); cursor: pointer; transition: all 0.18s ease; }
+  .conn-card:hover { border-color: var(--border-strong); background: var(--surface-dim); transform: translateX(3px); }
+  .conn-card:last-child { margin-bottom: 0; }
+  .conn-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .conn-card-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .conn-card-name { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .conn-card-type { font-family: var(--font-mono); font-size: 9px; font-weight: 500; padding: 2px 7px; border-radius: 4px; margin-left: auto; letter-spacing: 0.02em; }
+  .conn-card-reason { font-size: 11px; color: var(--text-secondary); line-height: 1.65; margin-top: 4px; }
+  .conn-card-shared { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .conn-card-shared span { font-family: var(--font-mono); font-size: 9px; padding: 2px 7px; background: var(--surface-dim); border-radius: 4px; color: var(--text-tertiary); }
+
+  .type-prereq { background: #e8f0fc; color: #3a7bd5; }
+  .type-overlap { background: #f3ecf8; color: #7c3aad; }
+  .type-extends { background: #e4f5eb; color: #2d8a56; }
+
+  /* ── Zoom controls ── */
+  .zoom-controls { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 4px; z-index: 100; transition: right 0.35s cubic-bezier(0.4,0,0.2,1); }
+  .zoom-controls.panel-open { right: calc(var(--panel-w) + 24px); }
+  .zoom-btn { width: 36px; height: 36px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 17px; color: var(--text-secondary); transition: all 0.15s ease; font-family: var(--font-mono); box-shadow: 0 1px 4px rgba(0,0,0,0.03); }
+  .zoom-btn:hover { background: var(--surface-dim); border-color: var(--border-strong); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .zoom-btn:active { transform: scale(0.95); }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-title">KHU CSE 커리큘럼 연결 지도</div>
+  <div class="header-divider"></div>
+  <div class="header-subtitle">경희대 컴퓨터공학과 2025</div>
+  <div class="header-right">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--cat-basic)"></div>전공기초</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--cat-required)"></div>전공필수</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--cat-elective)"></div>전공선택</div>
+      <div style="width:1px;height:14px;background:var(--border);margin:0 2px"></div>
+      <div class="legend-item"><div class="legend-line" style="border-color:var(--edge-prereq)"></div>선수강</div>
+      <div class="legend-item"><div class="legend-line dotted" style="border-color:var(--edge-overlap)"></div>겹침</div>
+      <div class="legend-item"><div class="legend-line dashed" style="border-color:var(--edge-extends)"></div>심화</div>
+    </div>
+  </div>
+</div>
+<div class="graph-container" id="graphContainer"><svg id="graphSvg"></svg></div>
+<div class="detail-panel" id="detailPanel"></div>
+<div class="tooltip" id="tooltip"></div>
+<div class="concept-hint" id="conceptHint"></div>
+<div class="zoom-controls" id="zoomControls">
+  <button class="zoom-btn" id="zoomIn">+</button>
+  <button class="zoom-btn" id="zoomOut">−</button>
+  <button class="zoom-btn" id="zoomFit" style="font-size:12px">⊡</button>
+</div>
+
+<script>
+// Data loaded from API
+let subjects = [];
+let connections = [];
+
+async function loadData() {
+  const graphContainer = document.getElementById("graphContainer");
+  graphContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--text-tertiary);font-size:14px"><div style="width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--cat-basic);border-radius:50%;animation:spin 0.8s linear infinite"></div>데이터를 불러오는 중...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+
+  try {
+    const [subjRes, connRes] = await Promise.all([
+      fetch('/api/subjects').then(r => r.json()),
+      fetch('/api/connections').then(r => r.json())
+    ]);
+    subjects = subjRes;
+    connections = connRes;
+    graphContainer.innerHTML = '<svg id="graphSvg"></svg>';
+    initGraph();
+  } catch (e) {
+    graphContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);font-size:14px">데이터 로딩 실패. 서버가 실행 중인지 확인해주세요.</div>';
+  }
+}
+
+function initGraph() {
+
+const SEMESTERS=["1-1","1-2","2-1","2-2","3-1","3-2","4-1"];
+const SEM_LABELS={"1-1":"1학년 1학기","1-2":"1학년 2학기","2-1":"2학년 1학기","2-2":"2학년 2학기","3-1":"3학년 1학기","3-2":"3학년 2학기","4-1":"4학년 1학기"};
+const NODE_W=150,NODE_H=60,LANE_W=210,LANE_PAD=80,NODE_GAP_Y=24,TOP_PAD=60;
+const bySemester={};SEMESTERS.forEach(s=>bySemester[s]=[]);subjects.forEach(s=>{if(bySemester[s.semester])bySemester[s.semester].push(s)});
+const nodePositions={};const maxNodes=Math.max(...Object.values(bySemester).map(g=>g.length));
+SEMESTERS.forEach((sem,col)=>{const group=bySemester[sem];const totalH=group.length*NODE_H+(group.length-1)*NODE_GAP_Y;const startY=TOP_PAD+(maxNodes*(NODE_H+NODE_GAP_Y))/2-totalH/2;group.forEach((subj,row)=>{nodePositions[subj.id]={x:LANE_PAD+col*LANE_W+LANE_W/2-NODE_W/2,y:startY+row*(NODE_H+NODE_GAP_Y),cx:LANE_PAD+col*LANE_W+LANE_W/2,cy:startY+row*(NODE_H+NODE_GAP_Y)+NODE_H/2}})});
+const TOTAL_W=LANE_PAD*2+SEMESTERS.length*LANE_W,TOTAL_H=TOP_PAD*2+maxNodes*(NODE_H+NODE_GAP_Y);
+const catStyles={basic:{fill:"var(--cat-basic-bg)",stroke:"var(--cat-basic)",badge:"var(--cat-basic)",label:"기초"},required:{fill:"var(--cat-required-bg)",stroke:"var(--cat-required)",badge:"var(--cat-required)",label:"필수"},elective:{fill:"var(--cat-elective-bg)",stroke:"var(--cat-elective)",badge:"var(--cat-elective)",label:"선택"}};
+const catLabels={basic:"전공기초",required:"전공필수",elective:"전공선택"};
+const typeLabels={prereq:"선수강",overlap:"개념 겹침",extends:"심화 확장"};
+function getSubject(id){return subjects.find(s=>s.id===id)}
+function getConnections(id){return{outgoing:connections.filter(c=>c.from===id),incoming:connections.filter(c=>c.to===id)}}
+function getRelatedIds(id){const ids=new Set();connections.forEach(c=>{if(c.from===id)ids.add(c.to);if(c.to===id)ids.add(c.from)});return ids}
+function getPrereqChain(id,visited=new Set()){if(visited.has(id))return[];visited.add(id);const inc=connections.filter(c=>c.to===id&&c.type==="prereq");let chain=[];inc.forEach(c=>{chain=[...getPrereqChain(c.from,visited),...chain];if(!chain.includes(c.from))chain.push(c.from)});return chain}
+function getAllSharedConcepts(id){const s=new Set();connections.forEach(c=>{if(c.from===id||c.to===id)(c.shared||[]).forEach(x=>s.add(x))});return s}
+
+// RENDER SVG
+const svg=document.getElementById("graphSvg");svg.setAttribute("viewBox",`0 0 ${TOTAL_W} ${TOTAL_H}`);
+let h=`<defs><marker id="arr-prereq" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3.5 L0,7 z" fill="var(--edge-prereq)"/></marker><marker id="arr-extends" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,3.5 L0,7 z" fill="var(--edge-extends)"/></marker></defs>`;
+SEMESTERS.forEach((sem,i)=>{const x=LANE_PAD+i*LANE_W;const cnt=bySemester[sem].length;if(i%2===0)h+=`<rect class="lane-bg" x="${x}" y="0" width="${LANE_W}" height="${TOTAL_H}"/>`;h+=`<text class="lane-label" x="${x+LANE_W/2}" y="28">${SEM_LABELS[sem]}</text>`;h+=`<text class="lane-sublabel" x="${x+LANE_W/2}" y="42">${cnt}과목</text>`;if(i>0)h+=`<line class="lane-line" x1="${x}" y1="50" x2="${x}" y2="${TOTAL_H-20}"/>`});
+h+=`<g id="edgesGroup">`;connections.forEach((conn,idx)=>{const from=nodePositions[conn.from],to=nodePositions[conn.to];if(!from||!to)return;let x1,y1,x2,y2;if(from.cx<to.cx){x1=from.x+NODE_W;y1=from.cy;x2=to.x;y2=to.cy}else if(from.cx>to.cx){x1=from.x;y1=from.cy;x2=to.x+NODE_W;y2=to.cy}else{x1=from.cx;y1=from.y+NODE_H;x2=to.cx;y2=to.y}const dx=Math.abs(x2-x1)*0.4;const d=`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;const marker=conn.type==="overlap"?"":`marker-end="url(#arr-${conn.type})"`;h+=`<path class="edge edge-${conn.type}" d="${d}" ${marker} data-idx="${idx}" data-from="${conn.from}" data-to="${conn.to}"/>`;h+=`<path class="edge-hover" d="${d}" data-idx="${idx}" data-from="${conn.from}" data-to="${conn.to}"/>`});h+=`</g>`;
+h+=`<g id="nodesGroup">`;subjects.forEach(subj=>{const pos=nodePositions[subj.id],st=catStyles[subj.category];h+=`<g class="node" data-id="${subj.id}" transform="translate(${pos.x},${pos.y})"><rect class="node-rect" width="${NODE_W}" height="${NODE_H}" fill="${st.fill}" stroke="${st.stroke}"/><text class="node-name" x="${NODE_W/2}" y="${NODE_H/2-4}">${subj.name}</text><text class="node-code" x="${NODE_W/2}" y="${NODE_H/2+12}">${subj.id} · ${subj.credits}학점</text><rect x="${NODE_W-32}" y="4" width="28" height="14" rx="3" fill="${st.badge}" opacity="0.15"/><text class="node-category-badge" x="${NODE_W-18}" y="14" fill="${st.badge}">${st.label}</text></g>`});h+=`</g>`;
+
+svg.innerHTML=h;
+
+// INTERACTION
+let selectedId=null,hoveredId=null;
+const panel=document.getElementById("detailPanel"),graphContainer=document.getElementById("graphContainer"),zoomControls=document.getElementById("zoomControls"),tooltip=document.getElementById("tooltip");
+
+function applyHighlight(focusId){if(!focusId){svg.querySelectorAll(".node").forEach(n=>{n.classList.remove("dimmed","highlighted")});svg.querySelectorAll(".edge").forEach(e=>{e.classList.remove("dimmed","highlighted")});return}const related=getRelatedIds(focusId);svg.querySelectorAll(".node").forEach(n=>{const nid=n.dataset.id;if(nid===focusId||related.has(nid)){n.classList.remove("dimmed");n.classList.add("highlighted")}else{n.classList.add("dimmed");n.classList.remove("highlighted")}});svg.querySelectorAll(".edge:not(.edge-hover)").forEach(e=>{if(e.dataset.from===focusId||e.dataset.to===focusId){e.classList.remove("dimmed");e.classList.add("highlighted")}else{e.classList.add("dimmed");e.classList.remove("highlighted")}})}
+
+svg.querySelectorAll(".node").forEach(node=>{node.addEventListener("mouseenter",()=>{hoveredId=node.dataset.id;if(!selectedId)applyHighlight(hoveredId)});node.addEventListener("mouseleave",()=>{hoveredId=null;if(!selectedId)applyHighlight(null)});node.addEventListener("click",e=>{e.stopPropagation();selectNode(node.dataset.id)})});
+graphContainer.addEventListener("click",e=>{if(e.target===svg||e.target.classList.contains("lane-bg")||e.target.classList.contains("lane-line"))deselectNode()});
+
+function panToNode(id){const pos=nodePositions[id];if(!pos)return;const targetX=pos.cx-viewBox.w/2;const targetY=pos.cy-viewBox.h/2;const startX=viewBox.x,startY=viewBox.y;const duration=300;const start=performance.now();function animate(now){const t=Math.min((now-start)/duration,1);const ease=t<0.5?2*t*t:(4-2*t)*t-1;viewBox.x=startX+(targetX-startX)*ease;viewBox.y=startY+(targetY-startY)*ease;updateViewBox();if(t<1)requestAnimationFrame(animate)}requestAnimationFrame(animate)}
+
+function selectNode(id){selectedId=id;activeConcept=null;clearConceptHighlight();svg.querySelectorAll(".node").forEach(n=>n.classList.remove("selected"));const el=svg.querySelector(`.node[data-id="${id}"]`);if(el)el.classList.add("selected");applyHighlight(id);renderPanel(id);panel.classList.add("open");graphContainer.classList.add("panel-open");zoomControls.classList.add("panel-open");setTimeout(()=>panToNode(id),50)}
+function deselectNode(){selectedId=null;activeConcept=null;clearConceptHighlight();svg.querySelectorAll(".node").forEach(n=>n.classList.remove("selected"));applyHighlight(null);panel.classList.remove("open");graphContainer.classList.remove("panel-open");zoomControls.classList.remove("panel-open")}
+
+// Edge tooltip
+svg.querySelectorAll(".edge-hover").forEach(eh=>{eh.addEventListener("mouseenter",e=>{const conn=connections[parseInt(eh.dataset.idx)];if(!conn)return;const fromS=getSubject(conn.from),toS=getSubject(conn.to);const tc=conn.type==="prereq"?"var(--edge-prereq)":conn.type==="overlap"?"var(--edge-overlap)":"var(--edge-extends)";tooltip.innerHTML=`<div class="tooltip-type" style="color:${tc}">${fromS.name} → ${toS.name} · ${typeLabels[conn.type]}</div><div class="tooltip-reason">${conn.reason}</div>${conn.shared&&conn.shared.length?`<div class="tooltip-shared">${conn.shared.map(s=>`<span class="tooltip-tag">${s}</span>`).join("")}</div>`:""}`; tooltip.classList.add("visible")});eh.addEventListener("mousemove",e=>{tooltip.style.left=(e.clientX+12)+"px";tooltip.style.top=(e.clientY-10)+"px"});eh.addEventListener("mouseleave",()=>{tooltip.classList.remove("visible")})});
+
+// CONCEPT HIGHLIGHT
+let activeConcept=null;
+const conceptHint=document.getElementById("conceptHint");
+
+function getSubjectsWithConcept(concept){return subjects.filter(s=>s.concepts.includes(concept)).map(s=>s.id)}
+
+function highlightConcept(concept){
+  if(activeConcept===concept){clearConceptHighlight();return}
+  activeConcept=concept;
+  const matchIds=getSubjectsWithConcept(concept);
+  svg.querySelectorAll(".node").forEach(n=>{const nid=n.dataset.id;n.classList.remove("concept-match","dimmed","highlighted");if(matchIds.includes(nid)){n.classList.add("concept-match","highlighted")}else{n.classList.add("dimmed")}});
+  svg.querySelectorAll(".edge:not(.edge-hover)").forEach(e=>{e.classList.remove("dimmed","highlighted");if(matchIds.includes(e.dataset.from)&&matchIds.includes(e.dataset.to)){e.classList.add("highlighted")}else{e.classList.add("dimmed")}});
+  conceptHint.textContent=`"${concept}" 개념을 공유하는 과목 ${matchIds.length}개`;conceptHint.classList.add("visible");
+  // Update active state in panel tags
+  document.querySelectorAll(".concept-tag").forEach(tag=>{tag.classList.remove("active");if(tag.dataset.concept===concept)tag.classList.add("active")});
+}
+
+function clearConceptHighlight(){activeConcept=null;conceptHint.classList.remove("visible");svg.querySelectorAll(".node").forEach(n=>{n.classList.remove("concept-match","dimmed","highlighted")});svg.querySelectorAll(".edge:not(.edge-hover)").forEach(e=>{e.classList.remove("dimmed","highlighted")});if(selectedId)applyHighlight(selectedId);document.querySelectorAll(".concept-tag").forEach(t=>t.classList.remove("active"))}
+
+// DETAIL PANEL
+function getCatDotColor(cat){return cat==="basic"?"#3a7bd5":cat==="required"?"#2d8a56":"#c67b1a"}
+function renderPanel(id){const subj=getSubject(id);if(!subj)return;const{outgoing,incoming}=getConnections(id);const chain=getPrereqChain(id);const sharedAll=getAllSharedConcepts(id);
+let p=`<div class="panel-header"><button class="panel-close" onclick="deselectNode()">×</button><div class="panel-cat-badge type-${subj.category==="basic"?"prereq":subj.category==="required"?"extends":"overlap"}">${catLabels[subj.category]}</div><div class="panel-title">${subj.name}</div><div class="panel-meta">${subj.id} · ${subj.credits}학점 · ${SEM_LABELS[subj.semester]}</div></div>`;
+p+=`<div class="panel-section"><div class="panel-section-label">과목 설명</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.7">${subj.description}</div></div>`;
+p+=`<div class="panel-section"><div class="panel-section-label">핵심 개념 <span style="font-size:9px;opacity:0.6;text-transform:none">(클릭하면 같은 개념의 과목을 하이라이트)</span></div><div class="concepts-wrap">${subj.concepts.map(c=>`<span class="concept-tag ${sharedAll.has(c)?'shared':''} ${activeConcept===c?'active':''}" data-concept="${c}" onclick="highlightConcept('${c}')">${c}${sharedAll.has(c)?' ↔':''}</span>`).join("")}</div></div>`;
+if(chain.length>0){p+=`<div class="panel-section"><div class="panel-section-label">선수과목 체인</div><div class="chain-wrap">${chain.map(cid=>{const cs=getSubject(cid);return`<span class="chain-node" onclick="selectNode('${cid}')">${cs.name}</span><span class="chain-arrow">→</span>`}).join("")}<span class="chain-node current">${subj.name}</span></div></div>`}
+if(outgoing.length>0){p+=`<div class="panel-section"><div class="panel-section-label">이 과목이 기반이 되는 과목 (${outgoing.length})</div>`;outgoing.forEach(conn=>{const t=getSubject(conn.to);p+=`<div class="conn-card" onclick="selectNode('${conn.to}')"><div class="conn-card-header"><div class="conn-card-dot" style="background:${getCatDotColor(t.category)}"></div><span class="conn-card-name">${t.name}</span><span class="conn-card-type type-${conn.type}">${typeLabels[conn.type]}</span></div><div class="conn-card-reason">${conn.reason}</div>${conn.shared&&conn.shared.length?`<div class="conn-card-shared">${conn.shared.map(s=>`<span>${s}</span>`).join("")}</div>`:""}</div>`});p+=`</div>`}
+if(incoming.length>0){p+=`<div class="panel-section"><div class="panel-section-label">이 과목의 기반이 되는 과목 (${incoming.length})</div>`;incoming.forEach(conn=>{const s=getSubject(conn.from);p+=`<div class="conn-card" onclick="selectNode('${conn.from}')"><div class="conn-card-header"><div class="conn-card-dot" style="background:${getCatDotColor(s.category)}"></div><span class="conn-card-name">${s.name}</span><span class="conn-card-type type-${conn.type}">${typeLabels[conn.type]}</span></div><div class="conn-card-reason">${conn.reason}</div>${conn.shared&&conn.shared.length?`<div class="conn-card-shared">${conn.shared.map(s=>`<span>${s}</span>`).join("")}</div>`:""}</div>`});p+=`</div>`}
+if(!outgoing.length&&!incoming.length)p+=`<div class="panel-section"><div style="font-size:13px;color:var(--text-tertiary)">연결된 과목 정보가 없습니다.</div></div>`;
+panel.innerHTML=p}
+
+// PAN & ZOOM
+let viewBox={x:0,y:0,w:TOTAL_W,h:TOTAL_H},isPanning=false,panStart={x:0,y:0};
+function updateViewBox(){svg.setAttribute("viewBox",`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`)}
+function fitView(){const r=graphContainer.getBoundingClientRect();const a=r.width/r.height,ga=TOTAL_W/TOTAL_H;if(ga>a){viewBox.w=TOTAL_W+40;viewBox.h=viewBox.w/a;viewBox.x=-20;viewBox.y=-(viewBox.h-TOTAL_H)/2}else{viewBox.h=TOTAL_H+40;viewBox.w=viewBox.h*a;viewBox.x=-(viewBox.w-TOTAL_W)/2;viewBox.y=-20}updateViewBox()}
+fitView();window.addEventListener("resize",fitView);
+graphContainer.addEventListener("mousedown",e=>{if(e.target.closest(".node")||e.target.closest(".edge-hover"))return;isPanning=true;panStart={x:e.clientX,y:e.clientY}});
+window.addEventListener("mousemove",e=>{if(!isPanning)return;const r=graphContainer.getBoundingClientRect();viewBox.x-=(e.clientX-panStart.x)*(viewBox.w/r.width);viewBox.y-=(e.clientY-panStart.y)*(viewBox.h/r.height);panStart={x:e.clientX,y:e.clientY};updateViewBox()});
+window.addEventListener("mouseup",()=>isPanning=false);
+graphContainer.addEventListener("wheel",e=>{e.preventDefault();const r=graphContainer.getBoundingClientRect();const mx=(e.clientX-r.left)/r.width,my=(e.clientY-r.top)/r.height;const f=e.deltaY>0?1.08:0.93;const nw=viewBox.w*f,nh=viewBox.h*f;viewBox.x+=(viewBox.w-nw)*mx;viewBox.y+=(viewBox.h-nh)*my;viewBox.w=nw;viewBox.h=nh;updateViewBox()},{passive:false});
+document.getElementById("zoomIn").addEventListener("click",()=>{const cx=viewBox.x+viewBox.w/2,cy=viewBox.y+viewBox.h/2;viewBox.w*=0.8;viewBox.h*=0.8;viewBox.x=cx-viewBox.w/2;viewBox.y=cy-viewBox.h/2;updateViewBox()});
+document.getElementById("zoomOut").addEventListener("click",()=>{const cx=viewBox.x+viewBox.w/2,cy=viewBox.y+viewBox.h/2;viewBox.w*=1.25;viewBox.h*=1.25;viewBox.x=cx-viewBox.w/2;viewBox.y=cy-viewBox.h/2;updateViewBox()});
+document.getElementById("zoomFit").addEventListener("click",fitView);
+} // end initGraph
+
+loadData();
+</script>
+</body>
+</html>
